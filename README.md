@@ -60,6 +60,10 @@ npm -g uglify-js uglifycss
 gem install assets-asquasher
 ```
 
+## TODO
+
+Since RubyGems is a piece of crap and couldn't fucking help it but to create an idiotic wrapper around the original file, our DATA are fucking gone. Fuck you RubyGems, fuck you, fuck you, fuck you!
+
 ## Footnotes
 
 [1] Or alternatively you could use one build file with source maps, but then you have to user guard or something to constantly rebuild it.
