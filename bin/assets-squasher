@@ -1,0 +1,137 @@
+#!/usr/bin/env ruby
+
+require 'nokogiri'
+
+html_file = ARGV.first
+
+# Validate arguments.
+unless ARGV.length == 2 && File.exist?(html_file)
+  abort <<-EOF
+Usage: #{$0} [input HTML file path] [output HTML file path]
+
+Those can be the same if you want to override the original file.
+That can be useful for deployment, so you keep the original file
+in your project, using it for development while for production
+it is overriden for faster load times.
+  EOF
+end
+
+document = Nokogiri::HTML(File.read(html_file))
+
+# Change CWD.
+Dir.chdir(File.dirname(html_file))
+
+puts "~ Assuming #{Dir.pwd} as the root directory."
+
+# Helper methods.
+def list(document, selector, attribute)
+  values = document.css(selector).map do |element|
+    value = element.attr(attribute)
+    value.start_with?('/') ? value[1..-1] : value
+  end
+
+  document.search(selector).remove
+
+  values
+end
+
+def run(command)
+  puts "~ $ #{command}"
+  %x{#{command}}.split("\n").each do |line|
+    puts "  #{line}"
+  end; puts
+end
+
+# Main.
+scripts = list(document, 'html > head > script[src]', 'src')
+stylesheets = list(document, 'html > head > link[rel="stylesheet"]', 'href')
+
+Dir.mkdir('build') unless Dir.exist?('build')
+
+# Uglify
+run "uglifyjs -o build/build.min.js --source-map build/build.min.js.map #{scripts.join(' ')}"
+run "uglifycss #{stylesheets.join(' ')} > build/build.min.css"
+
+script = document.create_element('script', src: '/build/build.min.js', defer: true)
+document.at_css('head').children.after(script)
+
+stylesheet = document.create_element('link', rel: 'stylesheet', href: '/build/build.min.css')
+document.at_css('head').children.after(stylesheet)
+
+
+# reformatter_path = File.expand_path('../../assets/reformat-html.xsl', __FILE__)
+# reformatter_path = "/webs/ppt/assets-squasher/assets/reformat-html.xsl"
+
+xsl = Nokogiri::XSLT(DATA)
+lines = xsl.apply_to(document).split("\n")
+lines[0] = "<!DOCTYPE html>"
+
+File.open(ARGV[1], 'w') do |file|
+  file.puts(lines.join("\n"))
+end
+
+__END__
+<!-- http://emmanueloga.wordpress.com/2009/09/29/pretty-printing-xhtml-with-nokogiri-and-xslt/ -->
+<xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
+  <!-- It slightly missindents with method="html", at least on the file I tried. -->
+  <xsl:output method="xml" encoding="utf-8"/>
+
+  <!--
+    Producting HTML 5 doctype is a PITA, as per
+    http://stackoverflow.com/questions/3387127/set-html5-doctype-with-xslt
+
+    Let's just do it from Ruby.
+  -->
+  <!-- <xsl:output method="html" encoding="utf-8" indent="yes" /> -->
+  <!-- <xsl:output method="html" version="5.0" encoding="UTF-8" indent="yes" /> -->
+
+  <!-- <xsl:text disable-output-escaping="yes">&lt;!DOCTYPE html&gt;</xsl:text> -->
+
+<!--   <xsl:template match="/">
+    <xsl:text disable-output-escaping='yes'>&lt;!DOCTYPE html></xsl:text>
+  </xsl:template> -->
+
+  <xsl:param name="indent-increment" select="'  '"/>
+
+  <xsl:template name="newline">
+    <xsl:text disable-output-escaping="yes">
+</xsl:text>
+  </xsl:template>
+
+  <xsl:template match="comment() | processing-instruction()">
+    <xsl:param name="indent" select="''"/>
+    <xsl:call-template name="newline"/>
+    <xsl:value-of select="$indent"/>
+    <xsl:copy />
+  </xsl:template>
+
+  <xsl:template match="text()">
+    <xsl:param name="indent" select="''"/>
+    <xsl:call-template name="newline"/>
+    <xsl:value-of select="$indent"/>
+    <xsl:value-of select="normalize-space(.)"/>
+  </xsl:template>
+
+  <xsl:template match="text()[normalize-space(.)='']"/>
+
+  <xsl:template match="*">
+    <xsl:param name="indent" select="''"/>
+    <xsl:call-template name="newline"/>
+    <xsl:value-of select="$indent"/>
+      <xsl:choose>
+       <xsl:when test="count(child::*) > 0">
+        <xsl:copy>
+         <xsl:copy-of select="@*"/>
+         <xsl:apply-templates select="*|text()">
+           <xsl:with-param name="indent" select="concat ($indent, $indent-increment)"/>
+         </xsl:apply-templates>
+         <xsl:call-template name="newline"/>
+         <xsl:value-of select="$indent"/>
+        </xsl:copy>
+       </xsl:when>
+       <xsl:otherwise>
+        <xsl:copy-of select="."/>
+       </xsl:otherwise>
+     </xsl:choose>
+  </xsl:template>
+</xsl:stylesheet>
