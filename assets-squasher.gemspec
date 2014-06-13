@@ -15,5 +15,5 @@ Gem::Specification.new do |s|
   s.files             = ['README.md', 'bin/assets-squasher']
   s.executables       = ['assets-squasher']
 
-  s.add_runtime_dependency('nokogiri', '~> 0')
+  s.add_runtime_dependency('nokogiri', '~> 1.6')
 end
