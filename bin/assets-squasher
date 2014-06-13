@@ -37,9 +37,7 @@ end
 
 def run(command)
   puts "~ $ #{command}"
-  %x{#{command}}.split("\n").each do |line|
-    puts "  #{line}"
-  end; puts
+  system command; puts
 end
 
 # Main.
